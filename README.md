@@ -1,5 +1,5 @@
 # TurboAsusSec
-This is a project attempting to integrate all the security portions of an Asus Merlin router, including Skynet, Diversion &amp; AIProtect.  
+This is a project attempting to integrate all the security portions of an Asus Merlin router, including Skynet, Diversion &amp; AIProtect.  The inital project will be to view various portions of security on an Asus router, with the plan to allow the user to more easily control some aspects of security on their Asus router.  
 
 This script is mostly AI created, at least initially, how else would you create such a big project???
 This script is insprired by the crew at snbforums, including RMERLIN, ADAMM, LONELYCODER & others.  
