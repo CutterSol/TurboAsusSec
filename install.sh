@@ -83,16 +83,10 @@ create_directories() {
 download_scripts() {
     echo -e "${YELLOW}Downloading scripts...${NC}"
     
-    local scripts=(
-        "tcds.sh"
-        "tcds-core.sh"
-        "tcds-aiprotect.sh"
-        "tcds-diagnostics.sh"
-        "tcds-whitelist.sh"
-        "tcds-service.sh"
-    )
+    # POSIX-compliant script list (no arrays)
+    local scripts="tcds.sh tcds-core.sh tcds-aiprotect.sh tcds-diagnostics.sh tcds-whitelist.sh tcds-service.sh"
     
-    for script in "${scripts[@]}"; do
+    for script in $scripts; do
         echo "  Downloading $script..."
         if curl -sSLf "$REPO_URL/scripts/$script" -o "$SCRIPT_DIR/$script" 2>/dev/null; then
             chmod 755 "$SCRIPT_DIR/$script"
