@@ -8,7 +8,7 @@
 #####################################################################################################
 
 VERSION="1.2.0"
-REPO_URL="https://raw.githubusercontent.com/CutterSol/TurboAsusSec/master"
+REPO_URL="https://raw.githubusercontent.com/CutterSol/TurboAsusSec/main"
 INSTALL_DIR="/jffs/addons/tcds"
 SCRIPT_DIR="$INSTALL_DIR/scripts"
 
