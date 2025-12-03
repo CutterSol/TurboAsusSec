@@ -282,6 +282,7 @@ warn() {
 #####################################################################################################
 
 # Compare version strings (returns 0 if v1 < v2, 1 if v1 == v2, 2 if v1 > v2)
+# POSIX-compliant version
 version_compare() {
     local v1="$1"
     local v2="$2"
@@ -290,19 +291,36 @@ version_compare() {
         return 1
     fi
     
-    local IFS=.
-    local i v1arr=($v1) v2arr=($v2)
+    # Simple string comparison for basic version checking
+    # Works for most cases like 1.2.0 vs 1.3.0
+    local v1_major=$(echo "$v1" | cut -d. -f1)
+    local v1_minor=$(echo "$v1" | cut -d. -f2)
+    local v1_patch=$(echo "$v1" | cut -d. -f3)
     
-    for ((i=0; i<${#v1arr[@]} || i<${#v2arr[@]}; i++)); do
-        local num1=${v1arr[i]:-0}
-        local num2=${v2arr[i]:-0}
-        
-        if [ "$num1" -lt "$num2" ]; then
-            return 0
-        elif [ "$num1" -gt "$num2" ]; then
-            return 2
-        fi
-    done
+    local v2_major=$(echo "$v2" | cut -d. -f1)
+    local v2_minor=$(echo "$v2" | cut -d. -f2)
+    local v2_patch=$(echo "$v2" | cut -d. -f3)
+    
+    # Compare major version
+    if [ "$v1_major" -lt "$v2_major" ]; then
+        return 0
+    elif [ "$v1_major" -gt "$v2_major" ]; then
+        return 2
+    fi
+    
+    # Compare minor version
+    if [ "$v1_minor" -lt "$v2_minor" ]; then
+        return 0
+    elif [ "$v1_minor" -gt "$v2_minor" ]; then
+        return 2
+    fi
+    
+    # Compare patch version
+    if [ "$v1_patch" -lt "$v2_patch" ]; then
+        return 0
+    elif [ "$v1_patch" -gt "$v2_patch" ]; then
+        return 2
+    fi
     
     return 1
 }
