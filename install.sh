@@ -39,7 +39,11 @@ install_scripts() {
         echo " - $script"
         download_script "$script" || echo "Failed to download $script"
     done
+
+    # Create symlink for CLI access
     ln -sf "$SCRIPT_DIR/tcds.sh" /jffs/scripts/tcds
+
+    # Backup and add alias
     echo "Backup created for /jffs/configs/profile.add"
     cp /jffs/configs/profile.add /jffs/configs/profile.add.bak 2>/dev/null
     if ! grep -q 'alias tcds=' /jffs/configs/profile.add 2>/dev/null; then
@@ -52,9 +56,16 @@ uninstall_scripts() {
     echo -n "WARNING: This will uninstall TurboAsusSec. Type 'yes' to continue: "
     read confirm
     if [ "$confirm" = "yes" ]; then
+        # Backup profile
         cp /jffs/configs/profile.add /jffs/configs/profile.add.bak 2>/dev/null
+        # Remove alias
         sed -i '/alias tcds=/d' /jffs/configs/profile.add 2>/dev/null
-        rm -f /jffs/scripts/tcds
+        # Remove symlink if it exists
+        if [ -L /jffs/scripts/tcds ]; then
+            rm -f /jffs/scripts/tcds
+            echo "Symlink /jffs/scripts/tcds removed"
+        fi
+        # Remove installed directory
         rm -rf "$INSTALL_DIR"
         echo "Uninstall complete"
     else
