@@ -16,6 +16,9 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Prevent shell tracing to reduce clutter
+set +x
+
 print_header() {
     clear
     echo -e "${CYAN}TurboAsusSec Installer v${VERSION}${NC}"
@@ -24,7 +27,9 @@ print_header() {
 
 download_script() {
     script=$1
-    curl -sSLf "$REPO_URL/scripts/$script" -o "$SCRIPT_DIR/$script"
+    curl -sSLf "$REPO_URL/scripts/$script" -o "$SCRIPT_DIR/$script" || {
+        echo -e "${RED}Failed to download $script${NC}"
+    }
     chmod 755 "$SCRIPT_DIR/$script"
 }
 
@@ -37,35 +42,33 @@ install_scripts() {
     echo -e "${YELLOW}Downloading scripts...${NC}"
     for script in tcds.sh tcds-core.sh tcds-aiprotect.sh tcds-diagnostics.sh tcds-whitelist.sh tcds-service.sh; do
         echo " - $script"
-        download_script "$script" || echo "Failed to download $script"
+        download_script "$script"
     done
 
     # Create symlink for CLI access
     ln -sf "$SCRIPT_DIR/tcds.sh" /jffs/scripts/tcds
 
     # Backup and add alias
-    echo "Backup created for /jffs/configs/profile.add"
     cp /jffs/configs/profile.add /jffs/configs/profile.add.bak 2>/dev/null
     if ! grep -q 'alias tcds=' /jffs/configs/profile.add 2>/dev/null; then
         echo 'alias tcds="sh /jffs/scripts/tcds.sh"' >> /jffs/configs/profile.add
     fi
+
+    # Source profile and confirm
     . /jffs/configs/profile.add 2>/dev/null
+    echo -e "${GREEN}Alias 'tcds' is active. You can now run 'tcds' from any shell.${NC}"
 }
 
 uninstall_scripts() {
     echo -n "WARNING: This will uninstall TurboAsusSec. Type 'yes' to continue: "
     read confirm
     if [ "$confirm" = "yes" ]; then
-        # Backup profile
         cp /jffs/configs/profile.add /jffs/configs/profile.add.bak 2>/dev/null
-        # Remove alias
         sed -i '/alias tcds=/d' /jffs/configs/profile.add 2>/dev/null
-        # Remove symlink if it exists
         if [ -L /jffs/scripts/tcds ]; then
             rm -f /jffs/scripts/tcds
             echo "Symlink /jffs/scripts/tcds removed"
         fi
-        # Remove installed directory
         rm -rf "$INSTALL_DIR"
         echo "Uninstall complete"
     else
