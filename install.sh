@@ -22,21 +22,9 @@ print_header() {
     echo ""
 }
 
-check_downloaders() {
-    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
-        echo -e "${RED}Error: curl or wget is required${NC}"
-        echo "Please install Entware curl/wget first."
-        exit 1
-    fi
-}
-
 download_script() {
     script=$1
-    if command -v curl >/dev/null 2>&1; then
-        curl -sSLf "$REPO_URL/scripts/$script" -o "$SCRIPT_DIR/$script"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q "$REPO_URL/scripts/$script" -O "$SCRIPT_DIR/$script"
-    fi
+    curl -sSLf "$REPO_URL/scripts/$script" -o "$SCRIPT_DIR/$script"
     chmod 755 "$SCRIPT_DIR/$script"
 }
 
@@ -52,6 +40,26 @@ install_scripts() {
         download_script "$script" || echo "Failed to download $script"
     done
     ln -sf "$SCRIPT_DIR/tcds.sh" /jffs/scripts/tcds
+    echo "Backup created for /jffs/configs/profile.add"
+    cp /jffs/configs/profile.add /jffs/configs/profile.add.bak 2>/dev/null
+    if ! grep -q 'alias tcds=' /jffs/configs/profile.add 2>/dev/null; then
+        echo 'alias tcds="sh /jffs/scripts/tcds.sh"' >> /jffs/configs/profile.add
+    fi
+    . /jffs/configs/profile.add 2>/dev/null
+}
+
+uninstall_scripts() {
+    echo -n "WARNING: This will uninstall TurboAsusSec. Type 'yes' to continue: "
+    read confirm
+    if [ "$confirm" = "yes" ]; then
+        cp /jffs/configs/profile.add /jffs/configs/profile.add.bak 2>/dev/null
+        sed -i '/alias tcds=/d' /jffs/configs/profile.add 2>/dev/null
+        rm -f /jffs/scripts/tcds
+        rm -rf "$INSTALL_DIR"
+        echo "Uninstall complete"
+    else
+        echo "Uninstall cancelled"
+    fi
 }
 
 main_menu() {
@@ -65,14 +73,10 @@ main_menu() {
     case "$choice" in
         1|install) create_directories; install_scripts; echo "Installation complete";;
         2|update) install_scripts; echo "Update complete";;
-        3|uninstall)
-            echo -n "Type 'yes' to uninstall: "
-            read confirm
-            [ "$confirm" = "yes" ] && rm -rf "$INSTALL_DIR" /jffs/scripts/tcds && echo "Uninstalled" || echo "Cancelled";;
+        3|uninstall) uninstall_scripts;;
         0|e|exit) exit 0;;
         *) echo "Invalid selection"; main_menu;;
     esac
 }
 
-check_downloaders
 main_menu
