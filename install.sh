@@ -1,13 +1,14 @@
 #!/bin/sh
 #####################################################################################################
-# TurboAsusSec Installer
+# TurboAsusSec Installer (Patched)
 # One-command installation for ASUS Merlin routers
+# Version 1.2.1 (patched)
 #
 # Installation:
 # curl -sSL https://raw.githubusercontent.com/CutterSol/TurboAsusSec/master/install.sh | sh
 #####################################################################################################
 
-VERSION="1.2.0"
+VERSION="1.2.1"
 REPO_URL="https://raw.githubusercontent.com/CutterSol/TurboAsusSec/main"
 INSTALL_DIR="/jffs/addons/tcds"
 SCRIPT_DIR="$INSTALL_DIR/scripts"
@@ -19,266 +20,134 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-print_header() {
-    clear
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║          TurboAsusSec Installer v${VERSION}                   ║${NC}"
-    echo -e "${CYAN}║   Unified Security Management for ASUS Merlin                ║${NC}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
+PROFILE_ADD="/jffs/configs/profile.add"
+MAIN_SCRIPT="$SCRIPT_DIR/tcds.sh"
+ALIAS_LINE='alias tcds="sh /jffs/addons/tcds/scripts/tcds.sh" # added by TurboAsusSec'
+
+log() {
+    printf "%b\n" "$1"
 }
 
-check_requirements() {
-    echo -e "${YELLOW}Checking requirements...${NC}"
-    
-    # Check for Merlin firmware
-    if ! grep -q "asuswrt-merlin" /etc/issue 2>/dev/null; then
-        if [ ! -f "/usr/sbin/helper.sh" ]; then
-            echo -e "${RED}Error: This script requires ASUS Merlin firmware${NC}"
-            exit 1
-        fi
+backup_file() {
+    file="$1"
+    if [ -e "$file" ]; then
+        cp -a "$file" "$file.$(date +%Y%m%d_%H%M%S).bak" 2>/dev/null || true
+        log "Backup created for $file"
     fi
-    
-    # Check for addon support
-    if ! nvram get rc_support 2>/dev/null | grep -q "am_addons"; then
-        echo -e "${YELLOW}Warning: Merlin Addon API not detected${NC}"
-        echo -e "${YELLOW}Web UI integration may not work (requires 384.15+)${NC}"
-    fi
-    
-    # Check for Skynet or Diversion
-    local has_integration=0
-    [ -f "/jffs/scripts/firewall" ] && has_integration=1 && echo -e "${GREEN}✓ Skynet detected${NC}"
-    [ -d "/opt/share/diversion" ] && has_integration=1 && echo -e "${GREEN}✓ Diversion detected${NC}"
-    
-    if [ "$has_integration" -eq 0 ]; then
-        echo -e "${RED}Warning: Neither Skynet nor Diversion detected${NC}"
-        echo -e "${YELLOW}Install at least one for full functionality${NC}"
-        echo ""
-        echo -ne "Continue anyway? (y/n): "
-        read continue_choice
-        [ "$continue_choice" != "y" ] && [ "$continue_choice" != "Y" ] && exit 1
-    fi
-    
-    echo -e "${GREEN}✓ Requirements check passed${NC}"
-    echo ""
 }
 
-create_directories() {
-    echo -e "${YELLOW}Creating directory structure...${NC}"
-    
-    mkdir -p "$INSTALL_DIR"
-    mkdir -p "$SCRIPT_DIR"
-    mkdir -p "$INSTALL_DIR/logs"
-    mkdir -p "$INSTALL_DIR/webui"
-    mkdir -p "/tmp/tcds"
-    
-    # Create empty custom lists
-    touch "$INSTALL_DIR/custom_whitelist.txt"
-    touch "$INSTALL_DIR/custom_blacklist.txt"
-    
-    echo -e "${GREEN}✓ Directories created${NC}"
-    echo ""
-}
+add_alias() {
+    if [ ! -f "$PROFILE_ADD" ]; then
+        printf '# TurboAsusSec profile.add created\n' > "$PROFILE_ADD"
+        chmod 644 "$PROFILE_ADD"
+    fi
 
-download_scripts() {
-    echo -e "${YELLOW}Downloading scripts...${NC}"
-    
-    # POSIX-compliant script list (no arrays)
-    local scripts="tcds.sh tcds-core.sh tcds-aiprotect.sh tcds-diagnostics.sh tcds-whitelist.sh tcds-service.sh"
-    
-    for script in $scripts; do
-        echo "  Downloading $script..."
-        if curl -sSLf "$REPO_URL/scripts/$script" -o "$SCRIPT_DIR/$script" 2>/dev/null; then
-            chmod 755 "$SCRIPT_DIR/$script"
-            echo -e "  ${GREEN}✓${NC} $script"
+    if ! grep -Fq 'alias tcds=' "$PROFILE_ADD"; then
+        backup_file "$PROFILE_ADD"
+        echo "$ALIAS_LINE" >> "$PROFILE_ADD"
+        log "Alias added to profile.add"
+        # Attempt to source immediately
+        if . "$PROFILE_ADD" 2>/dev/null; then
+            log "Profile sourced successfully"
         else
-            echo -e "  ${RED}✗${NC} Failed to download $script"
-            echo -e "  ${YELLOW}Trying alternative method...${NC}"
-            if wget -q "$REPO_URL/scripts/$script" -O "$SCRIPT_DIR/$script" 2>/dev/null; then
-                chmod 755 "$SCRIPT_DIR/$script"
-                echo -e "  ${GREEN}✓${NC} $script (via wget)"
-            else
-                echo -e "  ${RED}✗${NC} Download failed for $script"
-                return 1
-            fi
+            log "Profile could not be sourced automatically; source manually if needed"
         fi
+    fi
+}
+
+remove_alias() {
+    if [ -f "$PROFILE_ADD" ]; then
+        backup_file "$PROFILE_ADD"
+        sed -i '/alias tcds=/d' "$PROFILE_ADD" 2>/dev/null || true
+        log "Alias removed from profile.add"
+    fi
+}
+
+create_symlink() {
+    if [ -f "$MAIN_SCRIPT" ]; then
+        ln -sf "$MAIN_SCRIPT" /jffs/scripts/tcds
+        chmod +x "$MAIN_SCRIPT"
+        log "Symlink created: /jffs/scripts/tcds -> $MAIN_SCRIPT"
+    fi
+}
+
+remove_symlink() {
+    if [ -L "/jffs/scripts/tcds" ] || [ -f "/jffs/scripts/tcds" ]; then
+        rm -f /jffs/scripts/tcds
+        log "Symlink /jffs/scripts/tcds removed"
+    fi
+}
+
+install_scripts() {
+    mkdir -p "$SCRIPT_DIR" 2>/dev/null || log "Could not create script directory"
+    scripts="tcds.sh tcds-core.sh tcds-aiprotect.sh tcds-diagnostics.sh tcds-whitelist.sh tcds-service.sh"
+    for s in $scripts; do
+        url="$REPO_URL/scripts/$s"
+        dest="$SCRIPT_DIR/$s"
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$url" -o "$dest" || log "Failed to download $s"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -qO "$dest" "$url" || log "Failed to download $s"
+        else
+            log "No downloader available for $s"
+        fi
+        chmod +x "$dest" 2>/dev/null || true
     done
-    
-    # Create symlink for easy access
-    ln -sf "$SCRIPT_DIR/tcds.sh" /jffs/scripts/tcds
-    
-    echo -e "${GREEN}✓ All scripts downloaded${NC}"
-    echo ""
-}
-
-setup_service_event() {
-    echo -e "${YELLOW}Setting up service event handler...${NC}"
-    
-    # Create or update service-event script
-    if [ ! -f /jffs/scripts/service-event ]; then
-        cat > /jffs/scripts/service-event << 'SERVICEEVENT'
-#!/bin/sh
-SERVICEEVENT
-        chmod 755 /jffs/scripts/service-event
-    fi
-    
-    # Add TurboAsusSec hook if not present
-    if ! grep -q "### TurboAsusSec" /jffs/scripts/service-event; then
-        cat >> /jffs/scripts/service-event << 'SERVICECALL'
-
-### TurboAsusSec start
-/jffs/addons/tcds/scripts/tcds-service.sh $*
-### TurboAsusSec end
-SERVICECALL
-    fi
-    
-    echo -e "${GREEN}✓ Service event configured${NC}"
-    echo ""
-}
-
-initialize_settings() {
-    echo -e "${YELLOW}Initializing settings...${NC}"
-    
-    if [ -f /usr/sbin/helper.sh ]; then
-        . /usr/sbin/helper.sh
-        
-        am_settings_set tcds_version "$VERSION" 2>/dev/null
-        am_settings_set tcds_skynet_sync "enabled" 2>/dev/null
-        am_settings_set tcds_diversion_sync "enabled" 2>/dev/null
-        am_settings_set tcds_aiprotect_enabled "enabled" 2>/dev/null
-        am_settings_set tcds_cache_ttl "600" 2>/dev/null
-        
-        echo -e "${GREEN}✓ Settings initialized${NC}"
-    else
-        echo -e "${YELLOW}⚠ Helper not available, skipping settings${NC}"
-    fi
-    echo ""
-}
-
-show_completion() {
-    print_header
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║              Installation Complete!                          ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${CYAN}Access TurboAsusSec:${NC}"
-    echo -e "  • CLI: ${GREEN}tcds${NC} or ${GREEN}/jffs/scripts/tcds${NC}"
-    echo -e "  • Full path: /jffs/addons/tcds/scripts/tcds.sh"
-    echo ""
-    echo -e "${CYAN}Quick Start:${NC}"
-    echo -e "  ${GREEN}tcds${NC}              - Interactive menu"
-    echo -e "  ${GREEN}tcds overview${NC}     - System overview"
-    echo -e "  ${GREEN}tcds diagnostics${NC}  - Run diagnostics"
-    echo ""
-    echo -e "${CYAN}Next Steps:${NC}"
-    echo "  1. Run 'tcds diagnostics' to verify integration"
-    echo "  2. Explore the menu options"
-    echo "  3. Check logs at: $INSTALL_DIR/logs/tcds.log"
-    echo ""
-    echo -e "${CYAN}Documentation:${NC}"
-    echo "  https://github.com/CutterSol/TurboAsusSec"
-    echo ""
-    echo -e "${YELLOW}Note: Web UI integration coming in future update${NC}"
-    echo ""
 }
 
 uninstall() {
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║              TurboAsusSec Uninstaller                        ║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${YELLOW}This will remove TurboAsusSec from your router${NC}"
-    echo -e "${YELLOW}Custom lists will be backed up to /tmp/tcds_backup${NC}"
-    echo ""
-    echo -ne "Are you sure? (yes/no): "
-    read confirm
-    
-    if [ "$confirm" != "yes" ]; then
-        echo "Uninstall cancelled"
+    printf "WARNING: This will uninstall TurboAsusSec. Type 'yes' to continue: "
+    read ans
+    if [ "$ans" != "yes" ]; then
+        log "Uninstall cancelled"
         exit 0
     fi
-    
-    echo ""
-    echo "Backing up custom lists..."
-    mkdir -p /tmp/tcds_backup
-    cp "$INSTALL_DIR/custom_whitelist.txt" /tmp/tcds_backup/ 2>/dev/null
-    cp "$INSTALL_DIR/custom_blacklist.txt" /tmp/tcds_backup/ 2>/dev/null
-    
-    echo "Removing service-event hook..."
-    sed -i '/### TurboAsusSec start/,/### TurboAsusSec end/d' /jffs/scripts/service-event 2>/dev/null
-    
-    echo "Removing files..."
-    rm -rf "$INSTALL_DIR"
-    rm -f /jffs/scripts/tcds
-    rm -rf /tmp/tcds
-    
-    echo ""
-    echo -e "${GREEN}✓ TurboAsusSec uninstalled${NC}"
-    echo ""
-    echo "Backup location: /tmp/tcds_backup"
-    echo ""
+    remove_alias
+    remove_symlink
+    if [ -d "$INSTALL_DIR" ]; then
+        backup_file "$INSTALL_DIR"
+        rm -rf "$INSTALL_DIR"
+        log "$INSTALL_DIR removed"
+    fi
+    log "Uninstall complete"
+    exit 0
 }
 
 update() {
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║              TurboAsusSec Updater                            ║${NC}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    
-    if [ ! -d "$INSTALL_DIR" ]; then
-        echo -e "${RED}TurboAsusSec not installed${NC}"
-        echo "Run installer without arguments to install"
-        exit 1
-    fi
-    
-    echo "Backing up current installation..."
-    cp -r "$INSTALL_DIR" "${INSTALL_DIR}.backup.$(date +%Y%m%d_%H%M%S)"
-    
-    echo ""
-    download_scripts || {
-        echo -e "${RED}Update failed${NC}"
-        exit 1
-    }
-    
-    echo -e "${GREEN}✓ Update complete!${NC}"
-    echo ""
-    echo "Run 'tcds' to start using the updated version"
-    echo ""
+    log "Updating TurboAsusSec..."
+    install_scripts
+    create_symlink
+    add_alias
+    log "Update complete"
+    exit 0
 }
 
-# Main installation flow
-main() {
-    case "$1" in
-        uninstall)
-            uninstall
-            ;;
-        update)
-            update
-            ;;
-        *)
-            print_header
-            echo -e "${CYAN}Starting installation...${NC}"
-            echo ""
-            
-            check_requirements
-            create_directories
-            download_scripts || {
-                echo -e "${RED}Installation failed during download${NC}"
-                echo ""
-                echo "Possible causes:"
-                echo "  • Network connectivity issues"
-                echo "  • GitHub not accessible"
-                echo "  • Scripts not yet uploaded to repository"
-                echo ""
-                echo "Please check: https://github.com/CutterSol/TurboAsusSec"
-                exit 1
-            }
-            setup_service_event
-            initialize_settings
-            
-            show_completion
-            ;;
-    esac
+install() {
+    log "Installing TurboAsusSec..."
+    install_scripts
+    create_symlink
+    add_alias
+    log "Installation complete"
+    exit 0
 }
 
-main "$@"
+# Main menu / argument handling
+case "$1" in
+    install) install ;; 
+    update) update ;; 
+    uninstall) uninstall ;; 
+    '')
+        printf "TurboAsusSec Installer v%s\n" "$VERSION"
+        printf "1) Install\n2) Update\n3) Uninstall\n0) Exit\nSelect: "
+        read choice
+        case "$choice" in
+            1) install ;;
+            2) update ;;
+            3) uninstall ;;
+            0|e|exit) log "Exiting." ;;
+            *) log "Invalid selection" ;;
+        esac
+        ;;
+    *) log "Usage: $0 [install|update|uninstall]" ;;
+esac
+exit 0
