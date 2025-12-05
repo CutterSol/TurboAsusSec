@@ -101,18 +101,15 @@ show_skynet_logs() {
         return 1
     fi
     
-    # FIX: Replaced the original 'get_skynet_path' logic with a more robust 'find' command
-    # to reliably locate the log file on any mounted USB drive.
     local log_file=$(find /tmp/mnt -name "skynet.log" 2>/dev/null | head -n 1)
     
-    # Fallback for non-USB installs if not found on a mount
     if [ -z "$log_file" ] && [ -f "/jffs/skynet/skynet.log" ]; then
         log_file="/jffs/skynet/skynet.log"
     fi
     
     if [ ! -f "$log_file" ]; then
         print_warning "Skynet log file not found"
-        print_info "Checked common locations like /tmp/mnt/*/skynet/skynet.log"
+        print_info "Checked common locations like /tmp/mnt/*/skynet.log"
         return 1
     fi
     
@@ -125,7 +122,9 @@ show_skynet_logs() {
     echo "─────────────────────────────────────────────────────────────"
     
     grep "BLOCKED" "$log_file" | tail -n "$limit" || {
-        print_warning "No recent 'BLOCKED' entries found in log"
+        # FIX: Removed the inner single quotes from the warning message to prevent shell parsing errors.
+        # This was the cause of the 'unterminated quoted string' syntax error.
+        print_warning "No recent BLOCKED entries found in log"
     }
 }
 
@@ -142,21 +141,15 @@ show_merged_whitelist() {
         show_progress "Building merged whitelist"
         
         {
-            # Diversion allowlist
             if [ -f "$DIVERSION_PATH/list/allowlist" ]; then
                 awk '{print $1 "\tDiversion\tDomain"}' "$DIVERSION_PATH/list/allowlist" 2>/dev/null
             fi
             
-            # Skynet whitelist - check if ipset command works
-            # FIX: Replaced 'command -v ipset' with a direct check for the executable file.
-            # This is more reliable on embedded systems and fixes the bug where Skynet entries were not showing.
             if [ -x "/usr/sbin/ipset" ]; then
-                # Try to list Skynet IPSets
                 local skynet_sets=$(/usr/sbin/ipset list -n 2>/dev/null | grep -i skynet | grep -i white)
                 if [ -n "$skynet_sets" ]; then
                     echo "$skynet_sets" | while read setname; do
                         /usr/sbin/ipset list "$setname" 2>/dev/null | grep -E "^[0-9]" | awk -v set="$setname" '{
-                            # Detect type based on entry format
                             if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) {
                                 type="CIDR"
                             } else if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
@@ -170,7 +163,6 @@ show_merged_whitelist() {
                 fi
             fi
             
-            # Custom entries
             if [ -f "$INSTALL_DIR/custom_whitelist.txt" ]; then
                 awk '{print $1 "\tCustom\t-"}' "$INSTALL_DIR/custom_whitelist.txt" 2>/dev/null
             fi
@@ -188,7 +180,6 @@ show_merged_whitelist() {
         echo -e "${YELLOW}Entry\t\t\tSource\t\tType${NC}"
         echo "─────────────────────────────────────────────────────────────"
         
-        # Show ALL entries, with pagination if over 100
         if [ "$count" -gt 100 ]; then
             echo -e "${CYAN}Showing all $count entries (press 'q' to quit pager)${NC}"
             column -t < "$cache_file" | less
@@ -267,12 +258,10 @@ add_to_whitelist_interactive() {
             ;;
     esac
     
-    # Clear cache
     rm -f "$CACHE_DIR/merged_whitelist.cache"
     log_info "Added $entry to $target whitelist"
 }
 
-# NEW: Added a function to handle running the update script.
 run_update() {
     print_header "Update Script"
     local install_script_path="/jffs/addons/tcds/install.sh"
@@ -293,8 +282,7 @@ run_update() {
 show_main_menu() {
     clear
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    # NEW: Version number is now hardcoded to 1.2.2 to reflect changes.
-    echo -e "${CYAN}║         TurboAsusSec v1.2.2                         ║${NC}"
+    echo -e "${CYAN}║         TurboAsusSec v1.2.3                         ║${NC}"
     echo -e "${CYAN}║      Unified Security Management for ASUS Merlin             ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
@@ -307,7 +295,6 @@ show_main_menu() {
     echo "  5) AIProtect & Threat Analysis ►"
     echo "  6) System Diagnostics"
     echo "  7) Clear Cache"
-    # NEW: Added menu option 8 for updating the script.
     echo "  8) Update Script"
     echo "  0) Exit"
     echo ""
@@ -354,7 +341,6 @@ handle_menu_choice() {
             clear_all_cache
             print_success "Cache cleared"
             ;;
-        # NEW: Added case to handle choice 8, calling the new run_update function.
         8)
             echo ""
             run_update
@@ -400,10 +386,10 @@ case "$1" in
         echo "Cache cleared"
         ;;
     version)
-        echo "TurboAsusSec v1.2.2"
+        echo "TurboAsusSec v1.2.3"
         ;;
     help|--help|-h)
-        echo "TurboAsusSec v1.2.2"
+        echo "TurboAsusSec v1.2.3"
         echo ""
         echo "Usage: tcds [command]"
         echo ""
@@ -411,4 +397,23 @@ case "$1" in
         echo "  (none)          Interactive menu (default)"
         echo "  overview        Show system overview"
         echo "  diagnostics     Run system diagnostics"
-        echo "  whitelist-show  
+        echo "  whitelist-show  View merged whitelist"
+        echo "  skynet-logs     View recent Skynet blocks"
+        echo "  clear-cache     Clear all cache files"
+        echo "  version         Show version"
+        echo "  help            Show this help"
+        echo ""
+        ;;
+    menu|"")
+        while true; do
+            show_main_menu
+            read choice
+            handle_menu_choice "$choice"
+        done
+        ;;
+    *)
+        echo "Unknown command: $1"
+        echo "Run 'tcds help' for usage information"
+        exit 1
+        ;;
+esac
