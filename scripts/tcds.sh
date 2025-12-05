@@ -6,18 +6,18 @@
 #####################################################################################################
 
 # Determine script directory - handle symlinks and aliases
-if [ -L "$0" ]; then
-    # Script is a symlink, resolve it
-    SCRIPT_PATH=$(readlink -f "$0" 2>/dev/null || readlink "$0")
-    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-else
-    # Direct execution
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-fi
+# Always use the absolute path since we know where it's installed
+SCRIPT_DIR="/jffs/addons/tcds/scripts"
 
-# Fallback if still can't find it
+# Verify core module exists
 if [ ! -f "$SCRIPT_DIR/tcds-core.sh" ]; then
-    SCRIPT_DIR="/jffs/addons/tcds/scripts"
+    # Try to find it relative to script location as fallback
+    if [ -L "$0" ]; then
+        SCRIPT_PATH=$(readlink "$0" 2>/dev/null)
+        [ -n "$SCRIPT_PATH" ] && SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+    else
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    fi
 fi
 
 # Source core functions
