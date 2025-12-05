@@ -55,15 +55,17 @@ show_main_menu() {
 show_merged_whitelist() {
     print_header "Merged Whitelist"
     
-    # ... (code for Diversion and Custom whitelists) ...
+    # ... (code for Diversion and Custom whitelists would be here) ...
     
     # Skynet Whitelist
     # FIX: Use the corrected 'command_exists' check.
     if command_exists "ipset"; then
-        echo "Processing Skynet Whitelist..."
-        # FIX: Call ipset with its full, reliable path.
-        /usr/sbin/ipset list Skynet-Whitelist -o save 2>/dev/null | grep -vE "^(create|add)" | while read -r entry; do
-            # ... (logic to process and print entries) ...
+        # FIX: Added the actual processing logic inside the loop to resolve the syntax error.
+        # This was the cause of the 'unexpected "done"' error.
+        /usr/sbin/ipset list Skynet-Whitelist -o save 2>/dev/null | grep -vE "^(create|add)" | while read -r ip_address; do
+            # Assuming a helper function 'print_table_row' exists for formatting
+            # If not, a simple printf would also work here.
+            printf "%-47s %-15s %s\n" "$ip_address" "Skynet" "IP Address"
         done
     else
         print_warning "ipset command not found, cannot display Skynet whitelist."
@@ -149,4 +151,3 @@ while true; do
     esac
     pause
 done
-
