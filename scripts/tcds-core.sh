@@ -113,6 +113,24 @@ sqlite_available() {
     command -v sqlite3 >/dev/null 2>&1 || [ -x "/opt/bin/sqlite3" ]
 }
 
+# Get Skynet data path (handles USB mounts)
+get_skynet_path() {
+    # Check standard location first
+    if [ -d "/tmp/skynet" ]; then
+        echo "/tmp/skynet"
+        return 0
+    fi
+    
+    # Check USB mounts
+    local skynet_path=$(find /tmp/mnt -type d -name "skynet" 2>/dev/null | head -1)
+    if [ -n "$skynet_path" ] && [ -f "$skynet_path/skynet.log" ]; then
+        echo "$skynet_path"
+        return 0
+    fi
+    
+    return 1
+}
+
 #####################################################################################################
 # SYSTEM CHECKS
 #####################################################################################################
