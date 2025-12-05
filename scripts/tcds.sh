@@ -101,7 +101,16 @@ show_skynet_logs() {
         return 1
     fi
     
-    local log_file="/tmp/skynet/skynet.log"
+    # Get actual Skynet path
+    local skynet_path=$(get_skynet_path)
+    
+    if [ -z "$skynet_path" ]; then
+        print_warning "Skynet data path not found"
+        print_info "Checked: /tmp/skynet and USB mounts"
+        return 1
+    fi
+    
+    local log_file="$skynet_path/skynet.log"
     
     if [ ! -f "$log_file" ]; then
         print_warning "Skynet log file not found"
