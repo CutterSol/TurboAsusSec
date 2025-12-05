@@ -1,13 +1,35 @@
 #!/bin/sh
 #####################################################################################################
-# TurboAsusSec - System Diagnostics Module
+# TurboAsusSec - System Diagnostics Module v1.2.1
 # Comprehensive system and integration checks
 #####################################################################################################
 
 # Source core functions if not already loaded
 if [ -z "$TCDS_VERSION" ]; then
-    . "$(dirname "$0")/tcds-core.sh"
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    . "$SCRIPT_DIR/tcds-core.sh"
 fi
+
+#####################################################################################################
+# SKYNET PATH DETECTION
+#####################################################################################################
+
+find_skynet_path() {
+    # Check common locations
+    if [ -f "/tmp/skynet/skynet.log" ]; then
+        echo "/tmp/skynet"
+        return 0
+    fi
+    
+    # Check USB mounts
+    local skynet_path=$(find /tmp/mnt -path "*/skynet/skynet.log" 2>/dev/null | head -1)
+    if [ -n "$skynet_path" ]; then
+        dirname "$skynet_path"
+        return 0
+    fi
+    
+    return 1
+}
 
 #####################################################################################################
 # MAIN DIAGNOSTICS
@@ -42,7 +64,7 @@ run_full_diagnostics() {
     check_command_verbose "curl" "/usr/sbin/curl"
     echo ""
     
-    # Skynet Integration
+    # Skynet Integration with dynamic path detection
     print_section "Skynet Integration"
     if skynet_installed; then
         print_success "Skynet installed"
@@ -51,31 +73,54 @@ run_full_diagnostics() {
         local skynet_version=$("$SKYNET_CMD" version 2>/dev/null | head -1 || echo "Unknown")
         echo "  Version: $skynet_version"
         
-        # Check IPSets
-        if ipset list Skynet-Whitelist >/dev/null 2>&1; then
-            local wl_count=$(ipset list Skynet-Whitelist 2>/dev/null | grep -c "^[0-9]")
-            print_success "Whitelist IPSet exists ($wl_count entries)"
+        # Find actual Skynet data path
+        local skynet_data_path=$(find_skynet_path)
+        if [ -n "$skynet_data_path" ]; then
+            echo "  Data path: $skynet_data_path"
+            
+            # Check for log file
+            if [ -f "$skynet_data_path/skynet.log" ]; then
+                local log_size=$(du -h "$skynet_data_path/skynet.log" 2>/dev/null | cut -f1)
+                print_success "Log file exists ($log_size)"
+                echo "    Location: $skynet_data_path/skynet.log"
+            else
+                print_warning "Log file not found"
+            fi
+            
+            # Check for IPSet save file
+            if [ -f "$skynet_data_path/skynet.ipset" ]; then
+                local ipset_size=$(du -h "$skynet_data_path/skynet.ipset" 2>/dev/null | cut -f1)
+                print_success "IPSet save file exists ($ipset_size)"
+            else
+                print_warning "IPSet save file not found"
+            fi
         else
-            print_warning "Whitelist IPSet not found"
+            print_warning "Skynet data path not found (checked /tmp/skynet and USB mounts)"
         fi
         
-        if ipset list Skynet-Blacklist >/dev/null 2>&1; then
-            local bl_count=$(ipset list Skynet-Blacklist 2>/dev/null | grep -c "^[0-9]")
-            print_success "Blacklist IPSet exists ($bl_count entries)"
-        else
-            print_warning "Blacklist IPSet not found"
-        fi
+        # Check IPSets - these might not exist if Skynet just installed
+        echo "  Checking IPSets:"
+        local ipsets_found=0
         
-        # Check Skynet logs
-        if [ -f "/tmp/skynet/skynet.log" ]; then
-            local log_size=$(du -h /tmp/skynet/skynet.log 2>/dev/null | cut -f1)
-            print_success "Log file exists ($log_size)"
+        # List all Skynet-related IPSets
+        if command -v ipset >/dev/null 2>&1; then
+            local skynet_ipsets=$(ipset list -n 2>/dev/null | grep -i skynet)
+            if [ -n "$skynet_ipsets" ]; then
+                echo "$skynet_ipsets" | while read ipset_name; do
+                    local count=$(ipset list "$ipset_name" 2>/dev/null | grep -c "^[0-9]")
+                    echo "    • $ipset_name: $count entries"
+                    ipsets_found=1
+                done
+            else
+                print_warning "No Skynet IPSets found (Skynet may need to be started)"
+            fi
         else
-            print_warning "Log file not found"
+            print_warning "ipset command not available"
         fi
     else
         print_warning "Skynet not installed"
         echo "  Expected location: $SKYNET_CMD"
+        print_info "Install Skynet: https://github.com/Adamm00/IPSet_ASUS"
     fi
     echo ""
     
@@ -115,6 +160,7 @@ run_full_diagnostics() {
     else
         print_warning "Diversion not installed"
         echo "  Expected location: $DIVERSION_PATH"
+        print_info "Install Diversion via amtm"
     fi
     echo ""
     
@@ -145,11 +191,12 @@ run_full_diagnostics() {
             fi
         else
             print_warning "sqlite3 not available - cannot query database"
+            print_info "Install: opkg install sqlite3-cli"
         fi
     else
         print_warning "AIProtect database not found"
         echo "  Expected location: $AIPROTECT_DB"
-        print_info "Enable AiProtect in router settings"
+        print_info "Enable AiProtect in router settings (AiProtection)"
     fi
     echo ""
     
@@ -200,7 +247,11 @@ run_full_diagnostics() {
     if [ -d "$CACHE_DIR" ]; then
         local cache_files=$(ls -1 "$CACHE_DIR" 2>/dev/null | wc -l)
         echo "  Cache files: $cache_files"
-        du -sh "$CACHE_DIR" 2>/dev/null | awk '{print "  Total size: " $1}'
+        if [ "$cache_files" -gt 0 ]; then
+            du -sh "$CACHE_DIR" 2>/dev/null | awk '{print "  Total size: " $1}'
+        else
+            echo "  Total size: 0"
+        fi
     else
         print_warning "Cache directory not found"
     fi
@@ -217,8 +268,8 @@ run_full_diagnostics() {
     
     if [ -x "$SKYNET_CMD" ]; then
         print_success "Skynet script is executable"
-    else
-        print_warning "Skynet script not executable or not found"
+    elif [ -f "$SKYNET_CMD" ]; then
+        print_warning "Skynet script exists but not executable"
     fi
     
     echo ""
@@ -238,6 +289,8 @@ run_full_diagnostics() {
         print_warning "No integrations detected!"
         print_info "Install Skynet and/or Diversion for full functionality"
     fi
+    
+    print_info "Diagnostics complete"
 }
 
 #####################################################################################################
@@ -277,11 +330,11 @@ handle_diagnostics_menu() {
     run_full_diagnostics
     
     echo ""
-    print_info "Diagnostics complete"
+    echo -ne "${CYAN}Press Enter to continue...${NC}"
+    read
 }
 
 # If run directly
 if [ "$(basename "$0")" = "tcds-diagnostics.sh" ]; then
     handle_diagnostics_menu
-    pause
 fi
