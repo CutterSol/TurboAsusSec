@@ -175,13 +175,13 @@ setup_alias() {
         # Backup first
         cp /jffs/configs/profile.add /jffs/configs/profile.add.bak 2>/dev/null
         
-        # Add alias if not present
-        if ! grep -q 'alias tcds=' /jffs/configs/profile.add 2>/dev/null; then
-            echo 'alias tcds="sh /jffs/scripts/tcds"  # TurboAsusSec' >> /jffs/configs/profile.add
-            echo -e "${GREEN}✓ Alias added to profile${NC}"
-        else
-            echo -e "${CYAN}ℹ Alias already exists${NC}"
-        fi
+        # Remove old alias if exists and add correct one
+        sed -i '/# TurboAsusSec/d' /jffs/configs/profile.add 2>/dev/null
+        sed -i '/alias tcds=/d' /jffs/configs/profile.add 2>/dev/null
+        
+        # Add correct alias (direct path, not through sh)
+        echo 'alias tcds="/jffs/addons/tcds/scripts/tcds.sh"  # TurboAsusSec' >> /jffs/configs/profile.add
+        echo -e "${GREEN}✓ Alias configured${NC}"
         
         # Source the profile for current session
         . /jffs/configs/profile.add 2>/dev/null
