@@ -1,6 +1,8 @@
-# TurboAsusSec
+# TurboAsusSec **(Beta)**
 
 **Unified Security Management for ASUS Merlin Routers**
+
+⚠️ **This project is in BETA** - Active development, features being tested
 
 Integrate and manage Skynet, Diversion, and AIProtect from a single, lightweight interface.
 
@@ -48,18 +50,16 @@ opkg install sqlite3-cli
 
 ## 🚀 Installation
 
-### One-Command Install
+### Interactive Installer (Recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/CutterSol/TurboAsusSec/master/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/CutterSol/TurboAsusSec/main/install.sh -o /tmp/tcds-install.sh && sh /tmp/tcds-install.sh
 ```
 
-### Alternative (Manual Download)
-
-```bash
-wget https://raw.githubusercontent.com/CutterSol/TurboAsusSec/master/install.sh -O /tmp/tcds-install.sh
-sh /tmp/tcds-install.sh
-```
+This opens an interactive menu where you can:
+- Install TurboAsusSec
+- Update to latest version
+- Uninstall completely
 
 ### Post-Installation
 
