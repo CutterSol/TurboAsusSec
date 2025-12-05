@@ -146,17 +146,33 @@ show_merged_whitelist() {
         {
             # Diversion allowlist
             if [ -f "$DIVERSION_PATH/list/allowlist" ]; then
-                awk '{print $1 "\tDiversion"}' "$DIVERSION_PATH/list/allowlist" 2>/dev/null
+                awk '{print $1 "\tDiversion\tDomain"}' "$DIVERSION_PATH/list/allowlist" 2>/dev/null
             fi
             
-            # Skynet whitelist
-            if ipset list Skynet-Whitelist >/dev/null 2>&1; then
-                ipset list Skynet-Whitelist 2>/dev/null | grep -E "^[0-9]" | awk '{print $1 "\tSkynet"}'
+            # Skynet whitelist - check if ipset command works
+            if command -v ipset >/dev/null 2>&1; then
+                # Try to list Skynet IPSets
+                local skynet_sets=$(ipset list -n 2>/dev/null | grep -i skynet | grep -i white)
+                if [ -n "$skynet_sets" ]; then
+                    echo "$skynet_sets" | while read setname; do
+                        ipset list "$setname" 2>/dev/null | grep -E "^[0-9]" | awk -v set="$setname" '{
+                            # Detect type based on entry format
+                            if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/) {
+                                type="CIDR"
+                            } else if ($1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
+                                type="IP"
+                            } else {
+                                type="Entry"
+                            }
+                            print $1 "\tSkynet\t" type
+                        }'
+                    done
+                fi
             fi
             
             # Custom entries
             if [ -f "$INSTALL_DIR/custom_whitelist.txt" ]; then
-                awk '{print $1 "\tCustom"}' "$INSTALL_DIR/custom_whitelist.txt" 2>/dev/null
+                awk '{print $1 "\tCustom\t-"}' "$INSTALL_DIR/custom_whitelist.txt" 2>/dev/null
             fi
         } | sort -u > "$cache_file"
         
@@ -169,13 +185,15 @@ show_merged_whitelist() {
     echo ""
     
     if [ "$count" -gt 0 ]; then
-        echo -e "${YELLOW}Entry${NC}\t\t\t${YELLOW}Source${NC}"
+        echo -e "${YELLOW}Entry\t\t\tSource\t\tType${NC}"
         echo "─────────────────────────────────────────────────────────────"
-        column -t < "$cache_file" | head -50
         
-        if [ "$count" -gt 50 ]; then
-            echo ""
-            print_info "Showing first 50 of $count entries"
+        # Show ALL entries, with pagination if over 100
+        if [ "$count" -gt 100 ]; then
+            echo -e "${CYAN}Showing all $count entries (press 'q' to quit pager)${NC}"
+            column -t < "$cache_file" | less
+        else
+            column -t < "$cache_file"
         fi
     else
         print_warning "No whitelist entries found"
