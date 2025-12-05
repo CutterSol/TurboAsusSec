@@ -5,14 +5,28 @@
 # Orchestrates all modules and provides main menu interface
 #####################################################################################################
 
-# Determine script directory
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Determine script directory - handle symlinks and aliases
+if [ -L "$0" ]; then
+    # Script is a symlink, resolve it
+    SCRIPT_PATH=$(readlink -f "$0" 2>/dev/null || readlink "$0")
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+else
+    # Direct execution
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
+
+# Fallback if still can't find it
+if [ ! -f "$SCRIPT_DIR/tcds-core.sh" ]; then
+    SCRIPT_DIR="/jffs/addons/tcds/scripts"
+fi
 
 # Source core functions
 if [ -f "$SCRIPT_DIR/tcds-core.sh" ]; then
     . "$SCRIPT_DIR/tcds-core.sh"
 else
     echo "ERROR: Core module not found"
+    echo "Expected location: $SCRIPT_DIR/tcds-core.sh"
+    echo "Try reinstalling: curl -sSL https://raw.githubusercontent.com/CutterSol/TurboAsusSec/main/install.sh -o /tmp/tcds-install.sh && sh /tmp/tcds-install.sh"
     exit 1
 fi
 
@@ -251,7 +265,7 @@ show_main_menu() {
     echo "  5) AIProtect & Threat Analysis ►"
     echo "  6) System Diagnostics"
     echo "  7) Clear Cache"
-    echo "  0 or e) Exit"
+    echo "  0) Exit"
     echo ""
     echo -ne "${CYAN}Enter choice: ${NC}"
 }
